@@ -12,3 +12,4 @@ The project documentation will be built during the bootcamp sessions.
 - [Functional Requirements](../docs/functional-requirements.md) - Required task management features and completion criteria
 - [UI Guidelines](../docs/ui-guidelines.md) - Shared UI conventions for components, buttons, and tooltip behavior
 - [Testing Guidelines](../docs/testing-guidelines.md) - Testing standards for unit, integration, end-to-end, and port configuration
+- [Coding Guidelines](../docs/coding-guidelines.md) - Shared coding standards for best practices, design principles, and naming
