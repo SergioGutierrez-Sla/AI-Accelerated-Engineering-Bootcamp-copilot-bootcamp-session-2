@@ -1,125 +1,146 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import './App.css';
+import { Typography } from '@mui/material';
+import { createTask, deleteTask, fetchTasks, updateTask } from './api/tasks';
+import DeleteTaskDialog from './components/DeleteTaskDialog';
+import EditTaskDialog from './components/EditTaskDialog';
+import SortControls from './components/SortControls';
+import TaskForm from './components/TaskForm';
+import TaskList from './components/TaskList';
+import { sortTasks } from './utils/taskUtils';
 
 function App() {
-  const [data, setData] = useState([]);
+  const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [newItem, setNewItem] = useState('');
+  const [creatingTask, setCreatingTask] = useState(false);
+  const [editingTask, setEditingTask] = useState(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [deletingTask, setDeletingTask] = useState(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [sortBy, setSortBy] = useState('dueDate');
+
+  const orderedTasks = sortTasks(tasks, sortBy);
 
   useEffect(() => {
-    fetchData();
+    loadTasks();
   }, []);
 
-  const fetchData = async () => {
+  const loadTasks = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/items');
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
-      const result = await response.json();
-      setData(result);
+      const result = await fetchTasks();
+      setTasks(result);
       setError(null);
     } catch (err) {
-      setError('Failed to fetch data: ' + err.message);
-      console.error('Error fetching data:', err);
+      setError(`Failed to fetch tasks: ${err.message}`);
+      console.error('Error fetching tasks:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!newItem.trim()) return;
-
+  const handleCreateTask = async (task) => {
     try {
-      const response = await fetch('/api/items', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ name: newItem }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to add item');
-      }
-
-      const result = await response.json();
-      setData([...data, result]);
-      setNewItem('');
+      setCreatingTask(true);
+      const createdTask = await createTask(task);
+      setTasks((currentTasks) => [...currentTasks, createdTask]);
+      setError(null);
     } catch (err) {
-      setError('Error adding item: ' + err.message);
-      console.error('Error adding item:', err);
+      setError(`Error creating task: ${err.message}`);
+      console.error('Error creating task:', err);
+    } finally {
+      setCreatingTask(false);
     }
   };
 
-  const handleDelete = async (itemId) => {
+  const handleStartEditTask = (task) => {
+    if (task.status !== 'pending') {
+      return;
+    }
+
+    setEditingTask(task);
+  };
+
+  const handleSaveEditTask = async (taskId, task) => {
     try {
-      const response = await fetch(`/api/items/${itemId}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete item');
-      }
-
-      setData(data.filter(item => item.id !== itemId));
+      setSavingEdit(true);
+      const updatedTask = await updateTask(taskId, task);
+      setTasks((currentTasks) => currentTasks.map((currentTask) => (
+        currentTask.id === taskId ? updatedTask : currentTask
+      )));
+      setEditingTask(null);
       setError(null);
     } catch (err) {
-      setError('Error deleting item: ' + err.message);
-      console.error('Error deleting item:', err);
+      setError(`Error updating task: ${err.message}`);
+      console.error('Error updating task:', err);
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleRequestDeleteTask = (task) => {
+    setDeletingTask(task);
+  };
+
+  const handleConfirmDeleteTask = async () => {
+    if (!deletingTask) {
+      return;
+    }
+
+    try {
+      setConfirmingDelete(true);
+      await deleteTask(deletingTask.id);
+      setTasks((currentTasks) => currentTasks.filter((task) => task.id !== deletingTask.id));
+      setDeletingTask(null);
+      setError(null);
+    } catch (err) {
+      setError(`Error deleting task: ${err.message}`);
+      console.error('Error deleting task:', err);
+    } finally {
+      setConfirmingDelete(false);
     }
   };
 
   return (
-    <div className="App">
+    <div className="app-shell">
       <header className="App-header">
-        <h1>To Do App</h1>
-        <p>Keep track of your tasks</p>
+        <Typography component="p" className="app-eyebrow">
+          Delivery Workspace
+        </Typography>
+        <h1>Task Planner</h1>
+        <p>Track the work ahead with the new task model and a clearer view of upcoming deadlines.</p>
       </header>
 
-      <main>
-        <section className="add-item-section">
-          <h2>Add New Item</h2>
-          <form onSubmit={handleSubmit}>
-            <input
-              type="text"
-              value={newItem}
-              onChange={(e) => setNewItem(e.target.value)}
-              placeholder="Enter item name"
-            />
-            <button type="submit">Add Item</button>
-          </form>
-        </section>
-
-        <section className="items-section">
-          <h2>Items from Database</h2>
-          {loading && <p>Loading data...</p>}
-          {error && <p className="error">{error}</p>}
-          {!loading && !error && (
-            <ul>
-              {data.length > 0 ? (
-                data.map((item) => (
-                  <li key={item.id}>
-                    <span>{item.name}</span>
-                    <button 
-                      onClick={() => handleDelete(item.id)}
-                      className="delete-btn"
-                      type="button"
-                    >
-                      Delete
-                    </button>
-                  </li>
-                ))
-              ) : (
-                <p>No items found. Add some!</p>
-              )}
-            </ul>
-          )}
-        </section>
+      <main className="app-main">
+        <div className="app-main__sidebar">
+          <TaskForm onSubmit={handleCreateTask} submitting={creatingTask} />
+          <SortControls onChange={setSortBy} sortBy={sortBy} />
+        </div>
+        <TaskList
+          error={loading ? null : error}
+          loading={loading}
+          onDelete={handleRequestDeleteTask}
+          onEdit={handleStartEditTask}
+          sortBy={sortBy}
+          tasks={orderedTasks}
+        />
       </main>
+
+      <EditTaskDialog
+        onClose={() => setEditingTask(null)}
+        onSubmit={handleSaveEditTask}
+        open={Boolean(editingTask)}
+        submitting={savingEdit}
+        task={editingTask}
+      />
+      <DeleteTaskDialog
+        onClose={() => setDeletingTask(null)}
+        onConfirm={handleConfirmDeleteTask}
+        open={Boolean(deletingTask)}
+        submitting={confirmingDelete}
+        task={deletingTask}
+      />
     </div>
   );
 }
